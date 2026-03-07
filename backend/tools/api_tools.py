@@ -1,6 +1,6 @@
 import httpx
 import os
-from langchain.tools import tool
+from langchain_core.tools import tool
 
 CAMPAIGN_API_BASE = os.getenv(
     "CAMPAIGN_API_BASE", "https://api.superbfsi-campaignx.inxiteout.ai"
