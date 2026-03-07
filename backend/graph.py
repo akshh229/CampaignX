@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 from agents.brief_parser import parse_brief
 from agents.segmentation import segment_customers
+from agents.strategy import generate_strategy
 from agents.content_gen import generate_content
 from agents.monitor import compute_metrics
 from tools.api_tools import get_customer_cohort, schedule_campaign, get_campaign_report
@@ -16,6 +17,7 @@ class CampaignState(TypedDict):
     parsed_brief: Optional[dict]
     customers: Optional[list]
     segments: Optional[dict]
+    strategy_text: Optional[str]
     content_a: Optional[dict]
     content_b: Optional[dict]
     hitl_decision: Optional[str]
@@ -44,6 +46,11 @@ def node_fetch_customers(state: CampaignState) -> dict:
 def node_segment(state: CampaignState) -> dict:
     segments = segment_customers(state["customers"], state["parsed_brief"])
     return {"segments": segments, "status": "segmented"}
+
+
+def node_strategy(state: CampaignState) -> dict:
+    strategy_text = generate_strategy(state["parsed_brief"])
+    return {"strategy_text": strategy_text, "status": "strategy_planned"}
 
 
 def node_generate_content(state: CampaignState) -> dict:
@@ -133,6 +140,7 @@ def build_graph():
     graph.add_node("parse_brief", node_parse_brief)
     graph.add_node("fetch_customers", node_fetch_customers)
     graph.add_node("segment", node_segment)
+    graph.add_node("strategy", node_strategy)
     graph.add_node("generate_content", node_generate_content)
     graph.add_node("hitl_approval", node_hitl_approval)
     graph.add_node("schedule", node_schedule)
@@ -142,7 +150,8 @@ def build_graph():
     graph.set_entry_point("parse_brief")
     graph.add_edge("parse_brief", "fetch_customers")
     graph.add_edge("fetch_customers", "segment")
-    graph.add_edge("segment", "generate_content")
+    graph.add_edge("segment", "strategy")
+    graph.add_edge("strategy", "generate_content")
     graph.add_edge("generate_content", "hitl_approval")
     graph.add_conditional_edges(
         "hitl_approval",

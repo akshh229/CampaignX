@@ -5,19 +5,34 @@ export default function ApprovalPanel({
   state: any
   onApprove: (d: 'approved' | 'rejected') => void
 }) {
+  if (!state?.content_a && !state?.content_b) {
+    return (
+      <div style={{ background: '#1e293b', borderRadius: '12px', padding: '2rem', maxWidth: '900px' }}>
+        <p style={{ color: '#94a3b8' }}>Waiting for content generation...</p>
+      </div>
+    )
+  }
+
   return (
     <div style={{ background: '#1e293b', borderRadius: '12px', padding: '2rem', maxWidth: '900px' }}>
       <h2 style={{ color: '#38bdf8' }}>👤 Human Approval Required</h2>
+
+      {state.strategy_text && (
+        <div style={{ marginTop: '1rem', background: '#334155', borderRadius: '8px', padding: '1rem' }}>
+          <h3 style={{ color: '#38bdf8' }}>🎯 Campaign Strategy</h3>
+          <p style={{ fontSize: '13px', color: '#cbd5e1' }}>{state.strategy_text}</p>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
         {(['content_a', 'content_b'] as const).map((key, i) => (
           <div key={key} style={{ background: '#334155', borderRadius: '8px', padding: '1rem' }}>
             <h3 style={{ color: '#38bdf8' }}>Variant {i === 0 ? 'A (Professional)' : 'B (Friendly)'}</h3>
             <p>
-              <strong>Subject:</strong> {state[key]?.subject}
+              <strong>Subject:</strong> {state[key]?.subject || 'N/A'}
             </p>
             <p style={{ fontSize: '13px', color: '#cbd5e1', whiteSpace: 'pre-wrap' }}>
-              {state[key]?.body}
+              {state[key]?.body || 'No content generated'}
             </p>
           </div>
         ))}
@@ -25,17 +40,18 @@ export default function ApprovalPanel({
 
       <div style={{ marginTop: '1rem', background: '#334155', borderRadius: '8px', padding: '1rem' }}>
         <h3 style={{ color: '#38bdf8' }}>📊 Segments</h3>
-        <p>Segment A: {state.segments?.segment_a?.length || 0} customers</p>
-        <p>Segment B: {state.segments?.segment_b?.length || 0} customers</p>
-        <p>Strategy: {state.segments?.strategy}</p>
+        <p>Segment A: {state.segments?.segment_a?.length ?? 0} customers</p>
+        <p>Segment B: {state.segments?.segment_b?.length ?? 0} customers</p>
+        <p>Strategy: {state.segments?.strategy ?? 'N/A'}</p>
       </div>
 
       {state.parsed_brief && (
         <div style={{ marginTop: '1rem', background: '#334155', borderRadius: '8px', padding: '1rem' }}>
-          <h3 style={{ color: '#38bdf8' }}>🎯 Parsed Brief</h3>
-          <p>Product: {state.parsed_brief.product_name}</p>
-          <p>USP: {state.parsed_brief.usp}</p>
-          <p>Tone: {state.parsed_brief.tone}</p>
+          <h3 style={{ color: '#38bdf8' }}>📋 Parsed Brief</h3>
+          <p>Product: {state.parsed_brief.product_name ?? 'N/A'}</p>
+          <p>USP: {state.parsed_brief.usp ?? 'N/A'}</p>
+          <p>Tone: {state.parsed_brief.tone ?? 'N/A'}</p>
+          {state.parsed_brief.special_offers && <p>Special Offers: {state.parsed_brief.special_offers}</p>}
         </div>
       )}
 

@@ -1,6 +1,6 @@
-export default function MetricsDashboard({ state }: { state: any }) {
-  const campaigns = state.metrics?.campaigns || []
-  const score = state.metrics?.score || 0
+export default function MetricsDashboard({ state, onReset }: { state: any; onReset: () => void }) {
+  const campaigns = state?.metrics?.campaigns || []
+  const score = state?.metrics?.score || 0
 
   return (
     <div style={{ background: '#1e293b', borderRadius: '12px', padding: '2rem', maxWidth: '900px' }}>
@@ -46,8 +46,25 @@ export default function MetricsDashboard({ state }: { state: any }) {
       </div>
 
       <p style={{ marginTop: '1rem', color: '#94a3b8', fontSize: '13px' }}>
-        Iteration: {state.iteration}/3 | Status: {state.status}
+        Iteration: {state?.iteration ?? 0}/3 | Status: {state?.status ?? 'unknown'}
       </p>
+
+      <button
+        onClick={onReset}
+        style={{
+          marginTop: '1.5rem',
+          background: '#38bdf8',
+          color: '#0f172a',
+          border: 'none',
+          borderRadius: '8px',
+          padding: '0.75rem 2rem',
+          fontSize: '16px',
+          fontWeight: 'bold',
+          cursor: 'pointer',
+        }}
+      >
+        🔄 New Campaign
+      </button>
     </div>
   )
 }

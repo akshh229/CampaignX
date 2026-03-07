@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 import json
 from datetime import datetime
 from dotenv import load_dotenv
+from langgraph.types import Command
 
 load_dotenv()
 
@@ -22,6 +23,7 @@ app.add_middleware(
 
 init_db()
 active_threads: dict = {}  # thread_id -> config
+campaign_db_ids: dict = {}  # thread_id -> db campaign id
 
 
 class BriefRequest(BaseModel):
@@ -41,6 +43,7 @@ async def start_campaign(req: BriefRequest, db: Session = Depends(get_db)):
         "parsed_brief": None,
         "customers": None,
         "segments": None,
+        "strategy_text": None,
         "content_a": None,
         "content_b": None,
         "hitl_decision": None,
@@ -51,34 +54,65 @@ async def start_campaign(req: BriefRequest, db: Session = Depends(get_db)):
     }
     config = {"configurable": {"thread_id": thread_id}}
 
-    # Run until HITL interrupt
-    result = campaign_graph.invoke(initial_state, config)
+    try:
+        # Run until HITL interrupt
+        result = campaign_graph.invoke(initial_state, config)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
+
     active_threads[thread_id] = config
+
+    # Get state (interrupt returns early, so read snapshot)
+    snapshot = campaign_graph.get_state(config)
+    state = snapshot.values
 
     # Persist to DB
     campaign = Campaign(
         brief=req.brief,
-        strategy=json.dumps(result.get("parsed_brief", {})),
-        content_subject=result.get("content_a", {}).get("subject", ""),
-        content_body=result.get("content_a", {}).get("body", ""),
-        segments=json.dumps(result.get("segments", {})),
-        status=result.get("status", "pending"),
+        strategy=json.dumps(state.get("parsed_brief", {})),
+        content_subject=(state.get("content_a") or {}).get("subject", ""),
+        content_body=(state.get("content_a") or {}).get("body", ""),
+        segments=json.dumps(state.get("segments", {})),
+        status=state.get("status", "pending"),
     )
     db.add(campaign)
     db.commit()
+    db.refresh(campaign)
+    campaign_db_ids[thread_id] = campaign.id
 
-    return {"thread_id": thread_id, "state": result, "status": result.get("status")}
+    return {"thread_id": thread_id, "state": state, "status": state.get("status")}
 
 
 @app.post("/api/campaign/approve")
-async def approve_campaign(req: ApprovalRequest):
+async def approve_campaign(req: ApprovalRequest, db: Session = Depends(get_db)):
     config = active_threads.get(req.thread_id)
     if not config:
         raise HTTPException(status_code=404, detail="Thread not found")
 
-    # Resume from interrupt with approval decision
-    result = campaign_graph.invoke(None, config, input=req.decision)
-    return {"thread_id": req.thread_id, "state": result, "status": result.get("status")}
+    try:
+        # Resume from interrupt using LangGraph Command
+        campaign_graph.invoke(Command(resume=req.decision), config)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
+
+    # Read final state from snapshot
+    snapshot = campaign_graph.get_state(config)
+    state = snapshot.values
+
+    # Update DB record with final results
+    db_id = campaign_db_ids.get(req.thread_id)
+    if db_id:
+        campaign = db.query(Campaign).filter(Campaign.id == db_id).first()
+        if campaign:
+            campaign.status = state.get("status", campaign.status)
+            campaign.content_subject = (state.get("content_a") or {}).get("subject", campaign.content_subject)
+            campaign.content_body = (state.get("content_a") or {}).get("body", campaign.content_body)
+            metrics = state.get("metrics") or {}
+            campaign.open_rate = metrics.get("score", None)
+            campaign.click_rate = metrics.get("score", None)
+            db.commit()
+
+    return {"thread_id": req.thread_id, "state": state, "status": state.get("status")}
 
 
 @app.get("/api/campaign/status/{thread_id}")
@@ -86,11 +120,11 @@ async def get_status(thread_id: str):
     config = active_threads.get(thread_id)
     if not config:
         raise HTTPException(status_code=404, detail="Thread not found")
-    state = campaign_graph.get_state(config)
+    snapshot = campaign_graph.get_state(config)
     return {
         "thread_id": thread_id,
-        "state": state.values,
-        "status": state.values.get("status"),
+        "state": snapshot.values,
+        "status": snapshot.values.get("status"),
     }
 
 
