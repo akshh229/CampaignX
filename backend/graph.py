@@ -247,6 +247,15 @@ def node_fetch_customers(state: CampaignState, config: RunnableConfig) -> dict:
         raise RuntimeError("get_customer_cohort tool not available.")
     
     customers = get_customer_cohort_tool.invoke({})
+    print(f"DEBUG: get_customer_cohort_tool returned: type={type(customers)}, len={len(customers) if isinstance(customers, list) else 'NA'}", flush=True)
+    if isinstance(customers, str) and len(customers) > 0:
+        print("DEBUG: CUSTOMERS IS A STRING. PARSING WITH JSON...")
+        import json
+        try:
+            customers = json.loads(customers)
+        except Exception as e:
+            print(f"DEBUG JSON ERROR: {e}")
+            customers = []
     if isinstance(customers, dict):
         customers = customers.get("customers") or customers.get("data") or []
     if not customers:
@@ -502,14 +511,14 @@ def build_graph():
             conn = sqlite3.connect("campaignx_checkpoints.sqlite", check_same_thread=False)
             checkpointer = SqliteSaver(conn)
             checkpointer.setup()
-            print("✓ Using SqliteSaver for checkpoints")
+            print("Using SqliteSaver for checkpoints")
         except (ImportError, ModuleNotFoundError):
             # SqliteSaver not available in this langgraph version, use MemorySaver
             checkpointer = MemorySaver()
-            print("⚠ SqliteSaver not available, using MemorySaver for checkpoints")
+            print("SqliteSaver not available, using MemorySaver for checkpoints")
     except Exception as e:
         # Final fallback
-        print(f"⚠ Error initializing checkpointer: {e}, using MemorySaver")
+        print(f"Error initializing checkpointer: {e}, using MemorySaver")
         checkpointer = MemorySaver()
 
     return graph.compile(checkpointer=checkpointer)

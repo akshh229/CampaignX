@@ -1,9 +1,10 @@
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Optional
 
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(Path(__file__).with_name(".env"), override=True)
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,8 +24,6 @@ from database import (
 )
 from graph import CampaignState, campaign_graph, log_agent_event
 from models import ApprovalRequest, BriefRequest
-
-load_dotenv()
 
 app = FastAPI(title="CampaignX API")
 
@@ -284,8 +283,8 @@ async def get_status(thread_id: str, db: Session = Depends(get_db)):
     if not campaign:
         raise HTTPException(status_code=404, detail="Thread not found")
 
-    config = _get_or_create_config(thread_id)
-    snapshot = campaign_graph.get_state(config)
+    config = active_threads.get(thread_id)
+    snapshot = campaign_graph.get_state(config) if config else None
     state = snapshot.values if snapshot else _build_db_state(campaign)
     status = _derive_status(state, campaign)
 
@@ -460,19 +459,21 @@ async def health(db: Session = Depends(get_db)):
     except Exception:
         db_status = "error"
 
-    api_status = "ok"
+    api_status = "skipped"
     try:
         import os
         api_base = os.getenv("CAMPAIGN_API_BASE", "http://localhost:5000/api")
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{api_base}/openapi.json", timeout=2) as resp:
-                if resp.status != 200:
-                    api_status = "error"
+        api_key = (os.getenv("CAMPAIGN_API_KEY", "") or "").strip()
+        if api_key and api_key not in {"your_campaign_api_key_here", "your_campaign_api_key"}:
+            headers = {"Authorization": f"Bearer {api_key}"}
+            async with aiohttp.ClientSession(headers=headers) as session:
+                async with session.get(f"{api_base}/openapi.json", timeout=2) as resp:
+                    api_status = "ok" if resp.status == 200 else "error"
     except Exception:
-        api_status = "error"
+        api_status = "unreachable"
 
     return {
-        "status": "ok" if db_status == "ok" and api_status == "ok" else "degraded",
+        "status": "ok" if db_status == "ok" else "degraded",
         "db_status": db_status,
         "api_status": api_status,
         "timestamp": datetime.utcnow().isoformat(),
