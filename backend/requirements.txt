@@ -2,9 +2,10 @@ fastapi
 uvicorn
 langgraph
 langchain
-langchain-groq
+langchain-google-genai
 langchain-community
 sqlalchemy
 httpx
+aiohttp
 python-dotenv
 pydantic

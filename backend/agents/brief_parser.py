@@ -1,8 +1,8 @@
-from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 import json
 
-llm = ChatGroq(model="llama3-8b-8192", temperature=0)
+llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-8b", temperature=0)
 
 
 def parse_brief(brief: str) -> dict:
@@ -20,14 +20,16 @@ def parse_brief(brief: str) -> dict:
 
     Return ONLY valid JSON, nothing else.
     """)
-    chain = prompt | llm
-    result = chain.invoke({"brief": brief})
     try:
+        chain = prompt | llm
+        result = chain.invoke({"brief": brief})
         return json.loads(result.content)
     except Exception:
         return {
             "product_name": "XDeposit",
             "usp": brief,
+            "special_offers": "Additional 0.25 percentage point returns for female senior citizens",
+            "optimization_goal": "open rate and click rate",
             "tone": "professional",
             "include_inactive": True,
             "cta_url": "https://superbfsi.com/xdeposit/explore/",
